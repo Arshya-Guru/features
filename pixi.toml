@@ -1,0 +1,18 @@
+[project]
+name = "cortical-features"
+version = "0.1.0"
+description = "Snakebids pipeline for extracting cortical surface features"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.10"
+pip = "*"
+
+[pypi-dependencies]
+snakemake = ">=8.0"
+snakebids = ">=0.14"
+nibabel = "*"
+numpy = "*"
+scipy = "*"
+pybids = "*"
