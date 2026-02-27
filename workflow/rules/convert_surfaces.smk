@@ -70,6 +70,13 @@ rule convert_morph:
         """
         # Convert FreeSurfer curv -> GIFTI via mris_convert
         mris_convert -c {input.overlay} {input.surf} {output.gii} &> {log}
+        # FreeSurfer 8 prepends hemisphere prefix to output filename - fix it
+        _hemi=$(basename {input.surf} | cut -d. -f1)
+        _dir=$(dirname {output.gii})
+        _base=$(basename {output.gii})
+        if [ ! -f "{output.gii}" ] && [ -f "$_dir/$_hemi.$_base" ]; then
+            mv "$_dir/$_hemi.$_base" "{output.gii}" >> {log} 2>&1
+        fi
         """
 
 
@@ -101,6 +108,13 @@ rule convert_gradient:
         """
         # w-g.pct.mgh is a surface overlay in MGH format
         mris_convert -c {input.mgh} {input.surf} {output.gii} &> {log}
+        # FreeSurfer 8 prepends hemisphere prefix to output filename - fix it
+        _hemi=$(basename {input.surf} | cut -d. -f1)
+        _dir=$(dirname {output.gii})
+        _base=$(basename {output.gii})
+        if [ ! -f "{output.gii}" ] && [ -f "$_dir/$_hemi.$_base" ]; then
+            mv "$_dir/$_hemi.$_base" "{output.gii}" >> {log} 2>&1
+        fi
         """
 
 
@@ -194,4 +208,13 @@ rule convert_annotation:
             extension=".convert_annot.log",
         ),
     shell:
-        "mris_convert --annot {input.annot} {input.surf} {output.gii} &> {log}"
+        """
+        mris_convert --annot {input.annot} {input.surf} {output.gii} &> {log}
+        # FreeSurfer 8 prepends hemisphere prefix to output filename - fix it
+        _hemi=$(basename {input.surf} | cut -d. -f1)
+        _dir=$(dirname {output.gii})
+        _base=$(basename {output.gii})
+        if [ ! -f "{output.gii}" ] && [ -f "$_dir/$_hemi.$_base" ]; then
+            mv "$_dir/$_hemi.$_base" "{output.gii}" >> {log} 2>&1
+        fi
+        """
