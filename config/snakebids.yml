@@ -1,0 +1,62 @@
+# Analysis levels for the BIDS app
+analysis_levels:
+  - participant
+
+# Mapping from analysis_level to set of target rules
+targets_by_analysis_level:
+  participant:
+    - 'all'
+
+# BIDS input components
+# We only need T1w to enumerate subjects; actual features come from DeepPrep derivatives
+pybids_inputs:
+  t1w:
+    filters:
+      suffix: T1w
+      extension: .nii.gz
+    wildcards:
+      - subject
+
+# Custom CLI arguments
+parse_args:
+  --deepprep_dir:
+    help: "Path to DeepPrep (or FreeSurfer) derivatives directory"
+    type: Path
+    required: true
+  --freesurfer_layout:
+    help: >
+      Layout of FreeSurfer-style derivatives directory.
+      'deepprep' = {dir}/sub-{subject}/Recon/sub-{subject}/surf/
+      'freesurfer' = {dir}/sub-{subject}/surf/
+      'fastsurfer' = {dir}/sub-{subject}/surf/
+      'custom' = use --custom_surf_template and --custom_mri_template
+    default: deepprep
+    choices:
+      - deepprep
+      - freesurfer
+      - fastsurfer
+      - custom
+  --custom_surf_template:
+    help: >
+      Custom path template for surf directory.
+      Use {deepprep_dir}, {subject} as placeholders.
+      Example: '{deepprep_dir}/sub-{subject}/surf'
+    default: null
+  --custom_mri_template:
+    help: >
+      Custom path template for mri directory.
+      Use {deepprep_dir}, {subject} as placeholders.
+      Example: '{deepprep_dir}/sub-{subject}/mri'
+    default: null
+  --atlas:
+    help: >
+      Atlas annotation file(s) for parcellation (e.g., aparc, aparc.a2009s).
+      These correspond to FreeSurfer annotation file basenames.
+      Multiple atlases can be specified.
+    nargs: "*"
+    default: null
+
+# Hemispheres to process
+hemis:
+  - L
+  - R

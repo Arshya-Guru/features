@@ -1,0 +1,146 @@
+from snakebids import bids, generate_inputs, get_wildcard_constraints
+
+configfile: 'config/snakebids.yml'
+
+
+# --- Generate BIDS inputs (enumerates subjects from the raw BIDS dir) ---
+inputs = generate_inputs(
+    bids_dir=config["bids_dir"],
+    pybids_inputs=config["pybids_inputs"],
+    pybidsdb_dir=config.get("pybidsdb_dir"),
+    pybidsdb_reset=config.get("pybidsdb_reset"),
+    derivatives=config.get("derivatives", None),
+    participant_label=config.get("participant_label", None),
+    exclude_participant_label=config.get("exclude_participant_label", None),
+    validate=not config.get("plugins.validator.skip", False),
+)
+
+
+# --- Path resolution for FreeSurfer-style derivatives ---
+# Supports: deepprep, freesurfer, fastsurfer, custom layouts
+def get_surf_dir(wildcards):
+    """Return the surf directory for a given subject based on layout."""
+    layout = config.get("freesurfer_layout", "deepprep")
+    deepprep_dir = str(config["deepprep_dir"])
+    subject = wildcards.subject
+
+    if layout == "deepprep":
+        return f"{deepprep_dir}/sub-{subject}/Recon/sub-{subject}/surf"
+    elif layout in ("freesurfer", "fastsurfer"):
+        return f"{deepprep_dir}/sub-{subject}/surf"
+    elif layout == "custom":
+        template = config.get("custom_surf_template", "")
+        return template.format(deepprep_dir=deepprep_dir, subject=subject)
+    else:
+        raise ValueError(f"Unknown freesurfer_layout: {layout}")
+
+
+def get_mri_dir(wildcards):
+    """Return the mri directory for a given subject based on layout."""
+    layout = config.get("freesurfer_layout", "deepprep")
+    deepprep_dir = str(config["deepprep_dir"])
+    subject = wildcards.subject
+
+    if layout == "deepprep":
+        return f"{deepprep_dir}/sub-{subject}/Recon/sub-{subject}/mri"
+    elif layout in ("freesurfer", "fastsurfer"):
+        return f"{deepprep_dir}/sub-{subject}/mri"
+    elif layout == "custom":
+        template = config.get("custom_mri_template", "")
+        return template.format(deepprep_dir=deepprep_dir, subject=subject)
+    else:
+        raise ValueError(f"Unknown freesurfer_layout: {layout}")
+
+
+def get_annot_dir(wildcards):
+    """Return the label directory for a given subject (for atlas parcellation)."""
+    layout = config.get("freesurfer_layout", "deepprep")
+    deepprep_dir = str(config["deepprep_dir"])
+    subject = wildcards.subject
+
+    if layout == "deepprep":
+        return f"{deepprep_dir}/sub-{subject}/Recon/sub-{subject}/label"
+    elif layout in ("freesurfer", "fastsurfer"):
+        return f"{deepprep_dir}/sub-{subject}/label"
+    elif layout == "custom":
+        # Fall back to surf dir parent / label
+        template = config.get("custom_surf_template", "")
+        surf = template.format(deepprep_dir=deepprep_dir, subject=subject)
+        from pathlib import Path as P
+        return str(P(surf).parent / "label")
+    else:
+        raise ValueError(f"Unknown freesurfer_layout: {layout}")
+
+
+# --- Hemisphere mapping ---
+# Map BIDS hemi labels (L/R) to FreeSurfer convention (lh/rh)
+hemi_map = {"L": "lh", "R": "rh"}
+
+# Output root (set by snakebids)
+root = config.get("root", "results")
+
+# Available hemispheres
+hemis = config.get("hemis", ["L", "R"])
+
+# Atlas list for parcellation (None means skip)
+atlas_list = config.get("atlas", None)
+
+
+# --- Wildcard constraints ---
+wildcard_constraints:
+    subject="[a-zA-Z0-9]+",
+    hemi="[LR]",
+
+
+# --- Include rule modules ---
+include: "rules/convert_surfaces.smk"
+include: "rules/curvature_derived.smk"
+include: "rules/surface_geometry.smk"
+include: "rules/spatial_gradients.smk"
+include: "rules/depth_profiling.smk"
+include: "rules/expanded_features.smk"
+include: "rules/myelin_proxy.smk"
+include: "rules/combine_features.smk"
+include: "rules/atlas_parcellation.smk"
+
+
+# --- Master target rule ---
+def get_all_targets(wildcards):
+    """Collect all final outputs for all subjects and hemispheres."""
+    targets = []
+    subjects = inputs["t1w"].entities["subject"]
+
+    for subject in subjects:
+        for hemi in hemis:
+            # Combined feature file
+            targets.append(
+                bids(
+                    root=root,
+                    subject=subject,
+                    hemi=hemi,
+                    datatype="anat",
+                    suffix="features",
+                    extension=".shape.gii",
+                )
+            )
+            # Atlas parcellation CSVs (if atlases specified)
+            if atlas_list:
+                for atlas_name in atlas_list:
+                    targets.append(
+                        bids(
+                            root=root,
+                            subject=subject,
+                            hemi=hemi,
+                            atlas=atlas_name,
+                            datatype="anat",
+                            suffix="parcellatedfeatures",
+                            extension=".csv",
+                        )
+                    )
+    return targets
+
+
+rule all:
+    input:
+        get_all_targets,
+    default_target: True

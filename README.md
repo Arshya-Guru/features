@@ -1,67 +1,79 @@
 # EpLink Cortical Feature Extraction Pipeline
 
-A [Snakebids](https://snakebids.readthedocs.io) workflow that extracts 34 vertex-wise cortical surface features from [DeepPrep](https://github.com/pBFSLab/DeepPrep) (FreeSurfer-style) derivatives of T1-weighted MRI data.
+A [Snakebids](https://snakebids.readthedocs.io) workflow that extracts vertex-wise cortical surface features from [DeepPrep](https://github.com/pBFSLab/DeepPrep) (FreeSurfer-style) derivatives of T1-weighted MRI data.
 
-## Feature Groups (34 total)
+Supports multiple FreeSurfer-style derivative layouts: **DeepPrep**, **FreeSurfer**, **FastSurfer**, and **custom** path templates.
 
-### 1. Curvature-Derived (3)
-Computed from principal curvatures (k₁, k₂) via `wb_command -surface-curvature`:
-- **Gaussian curvature** — k₁ × k₂ (dome vs saddle vs flat)
-- **Curvedness** — √((k₁² + k₂²)/2) (how "bent" the surface is)
-- **Shape index** — (2/π) arctan((k₁+k₂)/(k₁−k₂)) (normalized shape descriptor)
+## Feature Groups (48+ features)
 
-### 2. Surface Geometry (4)
+### 1. Core Morphometrics (4)
+Direct from FreeSurfer outputs, converted to GIFTI:
+- **Cortical thickness** — distance between white and pial surfaces
+- **Sulcal depth** — depth of cortical sulci
+- **Mean curvature** — average surface curvature
+- **White-gray percent contrast** — T1w intensity contrast at the gray/white boundary
+
+### 2. Curvature-Derived (3)
+Computed from principal curvatures (k1, k2) via `wb_command -surface-curvature`:
+- **Gaussian curvature** — k1 x k2
+- **Curvedness** — sqrt((k1^2 + k2^2)/2)
+- **Shape index** — (2/pi) arctan((k1+k2)/(k1-k2))
+
+### 3. Surface Geometry (4)
 Derived from comparing pial and white surface meshes:
 - **Pial surface area** — vertex-wise area on pial surface
 - **White surface area** — vertex-wise area on white surface
 - **Area ratio** — pial/white (cortical folding complexity)
 - **Surface normal angle** — arccos(dot(pial_normal, white_normal))
 
-### 3. Spatial Gradients (4)
-`wb_command -metric-gradient` applied to base morphometric features:
-- **Gradient of thickness, sulcal depth, curvature, intensity gradient**
+### 4. Expanded Features (4)
+- **Local gyrification index (LGI)** — smoothed area ratio approximation
+- **Fractal dimension** — local fractal dimension from multi-scale surface analysis
+- **Cortical complexity** — surface roughness from local distance variance
+- **Fundal depth** — sulcal depth at local maxima (fundal vertices)
 
-### 4. T1w Depth Profiling (23)
-Sampled from `brain.mgz` along white→pial normals:
-- **9 depth intensity samples** (10%–90% cortical depth)
-- **6 profile summary statistics** (slope, curvature, variance, skewness, superficial/deep ratio, peak depth)
-- **4 WM subsurface features** (intensity at 1–3mm below white + slope)
-- **Intensity gradient** (pial − white T1w contrast)
+### 5. Spatial Gradients (11)
+`wb_command -metric-gradient` applied to morphometric features:
+- **First-order gradients (8):** thickness, sulc, curv, wgpct, Gaussian curvature, curvedness, shape index, area ratio
+- **Second-order gradients (3):** gradient of gradient for thickness, sulc, curv
+
+### 6. T1w Depth Profiling (22)
+Sampled from `brain.mgz` along white-to-pial normals:
+- **9 depth intensity samples** (10%-90% cortical depth)
+- **2 surface intensities** (white, pial)
+- **3 WM subsurface intensities** (1-3mm below white surface)
+- **6 profile summaries** (slope, curvature, variance, skewness, superficial/deep ratio, peak depth)
+- **WM slope** (intensity gradient in white matter)
+- **Intensity gradient** (pial - white T1w contrast)
+
+### 7. Myelin-Proxy Features (5, optional)
+Computed if T2w data is available:
+- **T1w/T2w ratio** at white, midthickness, pial surfaces
+- **Myelin depth profile slope**
+- **Myelin depth profile variance**
+
+### 8. Atlas-Based Parcellation (optional)
+Given FreeSurfer annotation files (e.g., Desikan-Killiany, Destrieux):
+- Regional **mean/std/median** for each feature
+- Output as CSV per subject/hemisphere/atlas
 
 ## Requirements
 
-- Python ≥ 3.10
-- [Snakemake](https://snakemake.github.io) ≥ 8.0
-- [Snakebids](https://snakebids.readthedocs.io) ≥ 0.14
+- Python >= 3.10
+- [Snakemake](https://snakemake.github.io) >= 8.0
+- [Snakebids](https://snakebids.readthedocs.io) >= 0.14
 - [FreeSurfer](https://surfer.nmr.mgh.harvard.edu/) (for `mris_convert`, `mri_convert`)
 - [Connectome Workbench](https://www.humanconnectome.org/software/workbench-command) (for `wb_command`)
 - Python packages: `nibabel`, `numpy`, `scipy`
 
-## Expected DeepPrep Directory Structure
+## Supported Derivative Layouts
 
-The pipeline expects FreeSurfer-style outputs from DeepPrep:
-
-```
-deepprep_derivatives/
-├── sub-001/
-│   ├── surf/
-│   │   ├── lh.white          # White matter surface
-│   │   ├── rh.white
-│   │   ├── lh.pial           # Pial surface
-│   │   ├── rh.pial
-│   │   ├── lh.thickness      # Cortical thickness
-│   │   ├── lh.sulc           # Sulcal depth
-│   │   ├── lh.curv           # Mean curvature
-│   │   └── lh.w-g.pct.mgh   # White-gray percent contrast
-│   └── mri/
-│       └── brain.mgz         # Bias-corrected T1w volume
-├── sub-002/
-│   └── ...
-```
-
-> **Note**: If your DeepPrep output uses different filenames (e.g., the gradient
-> overlay is named differently), edit the `convert_gradient` rule in
-> `workflow/rules/convert_surfaces.smk`.
+| Layout | Path pattern |
+|--------|-------------|
+| `deepprep` | `{dir}/sub-{subject}/Recon/sub-{subject}/surf/` |
+| `freesurfer` | `{dir}/sub-{subject}/surf/` |
+| `fastsurfer` | `{dir}/sub-{subject}/surf/` |
+| `custom` | User-specified template |
 
 ## Usage
 
@@ -70,34 +82,36 @@ deepprep_derivatives/
 ```bash
 python run.py /path/to/bids_dataset /path/to/output participant \
     --deepprep_dir /path/to/derivatives/deepprep \
+    --skip-bids-validation \
     --cores 8
 ```
 
-### Workflow Mode (for development)
+### With a different layout
 
-1. Edit `config/snakebids.yml` with your paths:
-   ```yaml
-   bids_dir: '/path/to/bids'
-   output_dir: '/path/to/output'
-   deepprep_dir: '/path/to/derivatives/deepprep'
-   ```
+```bash
+python run.py /path/to/bids /path/to/output participant \
+    --deepprep_dir /path/to/freesurfer_output \
+    --freesurfer_layout freesurfer \
+    --cores 4
+```
 
-2. First run (generates config):
-   ```bash
-   python run.py /path/to/bids . participant --deepprep_dir /path/to/deepprep
-   ```
+### With atlas parcellation
 
-3. Subsequent runs (direct Snakemake):
-   ```bash
-   snakemake --snakefile workflow/Snakefile --configfile config/snakebids.yml --cores 8
-   ```
+```bash
+python run.py /path/to/bids /path/to/output participant \
+    --deepprep_dir /path/to/derivatives \
+    --atlas aparc aparc.a2009s \
+    --skip-bids-validation \
+    --cores 4
+```
 
-### Single Subject
+### Single subject
 
 ```bash
 python run.py /path/to/bids /path/to/output participant \
     --participant-label 001 \
     --deepprep_dir /path/to/derivatives/deepprep \
+    --skip-bids-validation \
     --cores 4
 ```
 
@@ -107,33 +121,14 @@ python run.py /path/to/bids /path/to/output participant \
 output/
 ├── sub-001/
 │   └── anat/
-│       ├── sub-001_hemi-L_features.shape.gii     # Combined 34-feature GIFTI
+│       ├── sub-001_hemi-L_features.shape.gii     # Combined multi-feature GIFTI
 │       ├── sub-001_hemi-R_features.shape.gii
 │       ├── sub-001_hemi-L_white.surf.gii          # Converted surfaces
 │       ├── sub-001_hemi-L_pial.surf.gii
 │       ├── sub-001_hemi-L_thickness.shape.gii     # Individual feature maps
 │       ├── sub-001_hemi-L_gaussiancurvature.shape.gii
+│       ├── sub-001_hemi-L_lgi.shape.gii
+│       ├── sub-001_hemi-L_fractaldim.shape.gii
+│       ├── sub-001_hemi-L_atlas-aparc_parcellatedfeatures.csv
 │       └── ...
 ```
-
-The combined `features.shape.gii` file contains all 34 features as named data arrays in a single GIFTI, ready for downstream analysis or atlas-based parcellation.
-
-## Pipeline DAG
-
-```
-T1w (BIDS) ──> enumerate subjects
-                     │
-DeepPrep outputs ────┤
-    │                │
-    ├─ surfaces ─────┼── convert to GIFTI ──┬── curvature-derived (3)
-    │   (white,pial) │                      ├── surface geometry (4)
-    │                │                      ├── spatial gradients (4)
-    ├─ morphometry ──┼── convert to GIFTI ──┘
-    │   (thick,sulc, │
-    │    curv,grad)  │
-    │                │
-    └─ brain.mgz ────┼── convert to NIfTI ──── depth profiling (23)
-                     │
-                     └── combine all ──> features.shape.gii
-```
-# features

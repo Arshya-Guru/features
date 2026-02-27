@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Pixi
+.pixi/
+
+# Snakemake
+.snakemake/
+.snakebids
+
+# Results
+results/
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
