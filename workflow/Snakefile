@@ -101,6 +101,7 @@ include: "rules/depth_profiling.smk"
 include: "rules/expanded_features.smk"
 include: "rules/myelin_proxy.smk"
 include: "rules/combine_features.smk"
+include: "rules/smooth_resample.smk"
 include: "rules/atlas_parcellation.smk"
 
 
@@ -123,6 +124,21 @@ def get_all_targets(wildcards):
                     extension=".shape.gii",
                 )
             )
+            # Combined resampled features (if template_dir specified)
+            if template_dir:
+                for res in resolutions:
+                    targets.append(
+                        bids(
+                            root=root,
+                            subject=subject,
+                            hemi=hemi,
+                            space=res,
+                            datatype="anat",
+                            desc=smooth_desc,
+                            suffix="features",
+                            extension=".shape.gii",
+                        )
+                    )
             # Atlas parcellation CSVs (if atlases specified)
             if atlas_list:
                 for atlas_name in atlas_list:

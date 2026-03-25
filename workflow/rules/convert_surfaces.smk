@@ -2,6 +2,7 @@
 
 Converts:
 - White and pial surfaces (.white, .pial -> .surf.gii)
+- Registered sphere (.sphere.reg -> .surf.gii) for resampling
 - Morphometric overlays (.thickness, .sulc, .curv -> .shape.gii)
 - White-gray intensity contrast (.w-g.pct.mgh -> .shape.gii)
 - brain.mgz -> brain.nii.gz (for depth profiling)
@@ -35,6 +36,42 @@ rule convert_surface:
         ),
     shell:
         "mris_convert {input.surf} {output.gii} &> {log}"
+
+
+# --- Registered sphere conversion (for resampling to standard meshes) ---
+rule convert_sphere:
+    """Convert FreeSurfer registered sphere to GIFTI for resampling."""
+    input:
+        sphere=lambda wc: f"{get_surf_dir(wc)}/{hemi_map[wc.hemi]}.sphere.reg",
+    output:
+        gii=bids(
+            root=root,
+            subject="{subject}",
+            hemi="{hemi}",
+            datatype="anat",
+            suffix="sphere",
+            extension=".surf.gii",
+        ),
+    log:
+        bids(
+            root=root,
+            subject="{subject}",
+            hemi="{hemi}",
+            datatype="anat",
+            suffix="sphere",
+            extension=".convert_sphere.log",
+        ),
+    shell:
+        """
+        mris_convert {input.sphere} {output.gii} &> {log}
+        # FreeSurfer 8 may prepend hemisphere prefix to output filename
+        _hemi=$(basename {input.sphere} | cut -d. -f1)
+        _dir=$(dirname {output.gii})
+        _base=$(basename {output.gii})
+        if [ ! -f "{output.gii}" ] && [ -f "$_dir/$_hemi.$_base" ]; then
+            mv "$_dir/$_hemi.$_base" "{output.gii}" >> {log} 2>&1
+        fi
+        """
 
 
 # --- Morphometric overlay conversion (FreeSurfer curv format -> GIFTI) ---

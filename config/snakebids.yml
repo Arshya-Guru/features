@@ -55,6 +55,23 @@ parse_args:
       Multiple atlases can be specified.
     nargs: "*"
     default: null
+  --template_dir:
+    help: >
+      Path to template sphere directory for resampling to standard meshes.
+      Expects: {template_dir}/{resolution}/surf/{hemi}.sphere.surf.gii
+    type: Path
+    default: null
+  --smooth_sigma:
+    help: "Smoothing kernel sigma in mm (default: 10)"
+    type: int
+    default: 10
+  --resolutions:
+    help: "Target mesh resolutions for resampling (default: fsaverage fsaverage5 fsaverage6)"
+    nargs: "*"
+    default:
+      - fsaverage
+      - fsaverage5
+      - fsaverage6
 
 # Hemispheres to process
 hemis:

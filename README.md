@@ -1,6 +1,6 @@
 # EpLink Cortical Feature Extraction Pipeline
 
-A [Snakebids](https://snakebids.readthedocs.io) workflow that extracts vertex-wise cortical surface features from [DeepPrep](https://github.com/pBFSLab/DeepPrep) (FreeSurfer-style) derivatives of T1-weighted MRI data.
+A [Snakebids](https://snakebids.readthedocs.io) workflow that extracts vertex-wise cortical surface features from [DeepPrep](https://github.com/pBFSLab/DeepPrep) (FreeSurfer-style) derivatives of T1-weighted MRI data, with optional smoothing and resampling to standard meshes.
 
 Supports multiple FreeSurfer-style derivative layouts: **DeepPrep**, **FreeSurfer**, **FastSurfer**, and **custom** path templates.
 
@@ -52,7 +52,13 @@ Computed if T2w data is available:
 - **Myelin depth profile slope**
 - **Myelin depth profile variance**
 
-### 8. Atlas-Based Parcellation (optional)
+### 8. Smoothing & Resampling (optional)
+When `--template_dir` is provided, all 48 features are:
+- **Smoothed** on the white surface using a Gaussian kernel (default 10mm sigma) via `wb_command -metric-smoothing`
+- **Resampled** to standard mesh densities (fsaverage, fsaverage5, fsaverage6) via `wb_command -metric-resample` using barycentric interpolation on the registered sphere (`sphere.reg`)
+- **Combined** into a single multi-array GIFTI per subject/hemisphere/resolution
+
+### 9. Atlas-Based Parcellation (optional)
 Given FreeSurfer annotation files (e.g., Desikan-Killiany, Destrieux):
 - Regional **mean/std/median** for each feature
 - Output as CSV per subject/hemisphere/atlas
@@ -77,13 +83,33 @@ Given FreeSurfer annotation files (e.g., Desikan-Killiany, Destrieux):
 
 ## Usage
 
-### As a BIDS App
+### Feature extraction only
 
 ```bash
 python run.py /path/to/bids_dataset /path/to/output participant \
     --deepprep_dir /path/to/derivatives/deepprep \
     --skip-bids-validation \
     --cores 8
+```
+
+### With smoothing and resampling to standard meshes
+
+```bash
+python run.py /path/to/bids /path/to/output participant \
+    --deepprep_dir /path/to/derivatives/deepprep \
+    --template_dir /path/to/templates \
+    --smooth_sigma 10 \
+    --resolutions fsaverage fsaverage5 fsaverage6 \
+    --skip-bids-validation \
+    --cores 8
+```
+
+The template directory should contain standard mesh spheres at:
+```
+templates/
+├── fsaverage/surf/{lh,rh}.sphere.surf.gii
+├── fsaverage5/surf/{lh,rh}.sphere.surf.gii
+└── fsaverage6/surf/{lh,rh}.sphere.surf.gii
 ```
 
 ### With a different layout
@@ -121,14 +147,19 @@ python run.py /path/to/bids /path/to/output participant \
 output/
 ├── sub-001/
 │   └── anat/
-│       ├── sub-001_hemi-L_features.shape.gii     # Combined multi-feature GIFTI
+│       ├── sub-001_hemi-L_features.shape.gii                              # Combined native-space features (48 arrays)
 │       ├── sub-001_hemi-R_features.shape.gii
-│       ├── sub-001_hemi-L_white.surf.gii          # Converted surfaces
+│       ├── sub-001_hemi-L_white.surf.gii                                  # Converted surfaces
 │       ├── sub-001_hemi-L_pial.surf.gii
-│       ├── sub-001_hemi-L_thickness.shape.gii     # Individual feature maps
+│       ├── sub-001_hemi-L_sphere.surf.gii                                 # Registered sphere (for resampling)
+│       ├── sub-001_hemi-L_thickness.shape.gii                             # Individual feature maps
 │       ├── sub-001_hemi-L_gaussiancurvature.shape.gii
 │       ├── sub-001_hemi-L_lgi.shape.gii
-│       ├── sub-001_hemi-L_fractaldim.shape.gii
-│       ├── sub-001_hemi-L_atlas-aparc_parcellatedfeatures.csv
+│       ├── sub-001_hemi-L_desc-smooth10mm_thickness.shape.gii             # Smoothed features
+│       ├── sub-001_hemi-L_space-fsaverage_desc-smooth10mm_thickness.shape.gii    # Resampled features
+│       ├── sub-001_hemi-L_space-fsaverage_desc-smooth10mm_features.shape.gii     # Combined resampled (48 arrays)
+│       ├── sub-001_hemi-L_space-fsaverage5_desc-smooth10mm_features.shape.gii
+│       ├── sub-001_hemi-L_space-fsaverage6_desc-smooth10mm_features.shape.gii
+│       ├── sub-001_hemi-L_atlas-aparc_parcellatedfeatures.csv             # Atlas parcellation (optional)
 │       └── ...
 ```
