@@ -46,15 +46,8 @@ rule compute_principal_curvatures:
             suffix="{surfname}k1k2",
             extension=".log",
         ),
-    shell:
-        """
-        # wb_command -surface-curvature outputs optional -mean, -k1, -k2
-        # At least one output must be specified
-        wb_command -surface-curvature {input.surf} \
-            -k1 {output.k1} \
-            -k2 {output.k2} \
-            &> {log}
-        """
+    script:
+        "../scripts/compute_principal_curvatures.py"
 
 
 rule compute_curvature_features:
